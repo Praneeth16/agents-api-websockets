@@ -1,0 +1,9 @@
+{
+  "event_type": "ticket.created",
+  "ticket_id": "T-1004",
+  "correlation_id": "corr-1004",
+  "payload": {
+    "message": "Can you provide documentation on how to set up webhook integrations with your platform?",
+    "customer_tier": "standard"
+  }
+}

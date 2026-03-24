@@ -1,0 +1,9 @@
+{
+  "event_type": "ticket.created",
+  "ticket_id": "T-1002",
+  "correlation_id": "corr-1002",
+  "payload": {
+    "message": "Our main dashboard has been experiencing latency spikes for the past hour. Pages take 30 seconds to load.",
+    "customer_tier": "standard"
+  }
+}

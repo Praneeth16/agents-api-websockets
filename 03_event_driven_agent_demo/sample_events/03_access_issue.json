@@ -1,0 +1,9 @@
+{
+  "event_type": "ticket.created",
+  "ticket_id": "T-1003",
+  "correlation_id": "corr-1003",
+  "payload": {
+    "message": "Multiple team members are locked out after the SSO migration. They cannot login to the admin panel.",
+    "customer_tier": "standard"
+  }
+}

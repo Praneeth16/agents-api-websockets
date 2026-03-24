@@ -1,0 +1,9 @@
+{
+  "event_type": "ticket.created",
+  "ticket_id": "T-1006",
+  "correlation_id": "corr-1006",
+  "payload": {
+    "message": "Our last invoice was charged twice. Please review payment records for account #98712.",
+    "customer_tier": "standard"
+  }
+}

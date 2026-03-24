@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Support Operations Dashboard</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      background: #f6f8fb;
+      color: #1a1a1a;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 32px auto;
+      padding: 0 20px;
+    }
+    h1 { margin-bottom: 6px; }
+    .subtext { color: #4a5568; margin-bottom: 20px; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 20px;
+    }
+    .card {
+      background: white;
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
+    }
+    .card + .card { margin-top: 0; }
+    .submit-card { margin-bottom: 20px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 10px 8px;
+      border-bottom: 1px solid #e5e7eb;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f8fafc; }
+    .event-log {
+      height: 420px;
+      overflow-y: auto;
+      padding-left: 18px;
+    }
+    .event-log li {
+      margin-bottom: 10px;
+      line-height: 1.4;
+    }
+    .pill {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #e8eefc;
+      font-size: 12px;
+      margin-left: 6px;
+    }
+    label { font-size: 13px; font-weight: 600; color: #374151; }
+    textarea, select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      box-sizing: border-box;
+    }
+    textarea { resize: vertical; }
+    .form-row {
+      display: flex;
+      gap: 14px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+    .form-row > .field { flex: 1; min-width: 220px; }
+    .form-row > .action { flex: 0 0 auto; }
+    .btn {
+      padding: 9px 22px;
+      background: #3b82f6;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn:hover { background: #2563eb; }
+    .btn:disabled { opacity: 0.5; cursor: default; }
+    .status-msg { margin-top: 8px; font-size: 13px; color: #6b7280; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Customer Support Operations Dashboard</h1>
+    <p class="subtext">
+      Submit tickets below and watch the LLM-powered agent classify, route, and
+      update them in real time via WebSocket.
+    </p>
+
+    <!-- Ticket submission form -->
+    <div class="card submit-card">
+      <h3>Submit a Support Ticket</h3>
+      <form id="ticketForm" onsubmit="submitTicket(event)">
+        <div class="form-row">
+          <div class="field">
+            <label for="message">Message</label>
+            <textarea id="message" rows="2" placeholder="Describe the customer issue..."></textarea>
+          </div>
+          <div>
+            <label for="tier">Customer Tier</label>
+            <select id="tier">
+              <option value="standard">Standard</option>
+              <option value="enterprise">Enterprise</option>
+            </select>
+          </div>
+          <div class="action">
+            <button class="btn" type="submit" id="submitBtn">Submit Ticket</button>
+          </div>
+        </div>
+      </form>
+      <p class="status-msg" id="submitStatus"></p>
+    </div>
+
+    <!-- Live data panels -->
+    <div class="grid">
+      <div class="card">
+        <h3>Latest Ticket Events</h3>
+        <ol id="events" class="event-log"></ol>
+      </div>
+
+      <div class="card">
+        <h3>Ticket State Snapshot</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Ticket</th>
+              <th>Status</th>
+              <th>Priority</th>
+              <th>Team</th>
+            </tr>
+          </thead>
+          <tbody id="ticketRows"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const ticketStateMap = new Map();
+    const eventList = document.getElementById("events");
+    const ticketRows = document.getElementById("ticketRows");
+    const protocol = location.protocol === "https:" ? "wss" : "ws";
+    const socket = new WebSocket(`${protocol}://${location.host}/ws`);
+
+    socket.onopen = () => {
+      socket.send("dashboard-connected");
+    };
+
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      renderEvent(data);
+      refreshTicketTable();
+    };
+
+    function renderEvent(data) {
+      const item = document.createElement("li");
+      const eventType = data.event_type || "unknown";
+      const ticketId = data.ticket_id || "-";
+      const payloadText = JSON.stringify(data.payload || {});
+
+      item.innerHTML = `<strong>${eventType}</strong> <span class="pill">${ticketId}</span><br>${payloadText}`;
+      eventList.prepend(item);
+
+      updateTicketState(data);
+    }
+
+    function updateTicketState(data) {
+      const ticketId = data.ticket_id;
+      if (!ticketId || ticketId === "-") return;
+
+      const payload = data.payload || {};
+      const current = ticketStateMap.get(ticketId) || {
+        ticket_id: ticketId,
+        status: "received",
+        priority: "-",
+        assigned_team: "-"
+      };
+
+      if (data.event_type === "ticket.created") {
+        current.status = "received";
+      } else if (data.event_type === "ticket.processing.started") {
+        current.status = "processing";
+      } else if (data.event_type === "ticket.classified") {
+        current.status = "classified";
+        current.priority = payload.priority || current.priority;
+        current.assigned_team = payload.assigned_team || current.assigned_team;
+      } else if (data.event_type === "ticket.escalated") {
+        current.status = "escalated";
+        current.assigned_team = payload.assigned_team || current.assigned_team;
+      } else if (data.event_type === "ticket.routed") {
+        current.status = "routed";
+        current.assigned_team = payload.assigned_team || current.assigned_team;
+      }
+
+      ticketStateMap.set(ticketId, current);
+    }
+
+    function refreshTicketTable() {
+      ticketRows.innerHTML = "";
+      for (const ticket of ticketStateMap.values()) {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${ticket.ticket_id}</td>
+          <td>${ticket.status}</td>
+          <td>${ticket.priority || "-"}</td>
+          <td>${ticket.assigned_team || "-"}</td>
+        `;
+        ticketRows.appendChild(row);
+      }
+    }
+
+    /* ---- Ticket submission ---- */
+
+    let ticketCounter = 0;
+
+    async function submitTicket(e) {
+      e.preventDefault();
+      const msgEl = document.getElementById("message");
+      const message = msgEl.value.trim();
+      if (!message) return;
+
+      const tier = document.getElementById("tier").value;
+      ticketCounter++;
+      const ticketId  = `T-${Date.now()}-${ticketCounter}`;
+      const corrId    = `corr-${Date.now()}-${ticketCounter}`;
+
+      const body = {
+        event_type: "ticket.created",
+        ticket_id: ticketId,
+        correlation_id: corrId,
+        payload: { message, customer_tier: tier }
+      };
+
+      const btn = document.getElementById("submitBtn");
+      const status = document.getElementById("submitStatus");
+      btn.disabled = true;
+      status.textContent = "Submitting...";
+
+      try {
+        const res = await fetch("/events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        status.textContent = `Ticket ${data.ticket_id} accepted.`;
+        msgEl.value = "";
+      } catch (err) {
+        status.textContent = `Error: ${err.message}`;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>

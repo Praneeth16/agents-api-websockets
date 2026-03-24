@@ -1,0 +1,9 @@
+{
+  "event_type": "ticket.merged",
+  "ticket_id": "T-1002",
+  "correlation_id": "corr-1002",
+  "payload": {
+    "message": "Ticket T-1002 merged with T-1005 as they relate to the same outage.",
+    "merged_into": "T-1005"
+  }
+}

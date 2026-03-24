@@ -1,0 +1,9 @@
+{
+  "event_type": "ticket.updated",
+  "ticket_id": "T-1001",
+  "correlation_id": "corr-1001",
+  "payload": {
+    "message": "Customer confirmed the refund amount is $2,340. Finance team has been notified.",
+    "updated_by": "agent-smith"
+  }
+}

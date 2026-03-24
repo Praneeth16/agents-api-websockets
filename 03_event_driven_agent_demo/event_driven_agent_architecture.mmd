@@ -1,0 +1,71 @@
+flowchart TB
+    classDef external fill:#e8f0fe,stroke:#1a73e8,stroke-width:2px,color:#1a237e
+    classDef api fill:#e6f4ea,stroke:#34a853,stroke-width:2px,color:#1b5e20
+    classDef queue fill:#fef7e0,stroke:#f9ab00,stroke-width:2px,color:#7c4d00
+    classDef worker fill:#fce8e6,stroke:#ea4335,stroke-width:2px,color:#b71c1c
+    classDef agent fill:#f3e8fd,stroke:#9334e6,stroke-width:2px,color:#4a148c
+    classDef llm fill:#fde7f3,stroke:#d81b60,stroke-width:2px,color:#880e4f
+    classDef store fill:#e0f2f1,stroke:#00897b,stroke-width:2px,color:#004d40
+    classDef ws fill:#fff3e0,stroke:#ef6c00,stroke-width:2px,color:#e65100
+    classDef dashboard fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1
+
+    CLIENT(["🖥️ External Client<br/><i>curl / API Caller</i>"]):::external
+
+    subgraph FASTAPI["⚡ FastAPI Application"]
+        direction TB
+        API["📡 REST API<br/><b>POST /events</b><br/><i>Validates via Pydantic EventIn</i><br/><i>Returns 202 Accepted</i>"]:::api
+        QUEUE[["📬 Async Event Queue<br/><i>asyncio.Queue</i>"]]:::queue
+        WORKER["⚙️ Background Event Worker<br/><i>Continuously consumes events</i>"]:::worker
+
+        subgraph PUBSUB["📢 Event Publishing Layer"]
+            direction LR
+            PUBLISH["publish_event()"]:::worker
+            STORE[("💾 In-Memory Store<br/><b>Event Log</b> +<br/><b>Ticket States</b>")]:::store
+            WSMGR["🔌 WebSocket<br/>Connection Manager"]:::ws
+        end
+    end
+
+    subgraph LLM_LAYER["🧠 LLM Layer"]
+        direction TB
+        AGENT["🤖 Support Operations Agent<br/><i>LangChain Agent</i>"]:::agent
+        PROMPT["📝 ChatPromptTemplate<br/><i>System Prompt + Ticket Message<br/>+ Customer Tier</i>"]:::agent
+        CHAIN["🔗 LangChain Chain<br/><i>ChatOpenAI + with_structured_output()</i>"]:::agent
+    end
+
+    OPENAI{{"☁️ OpenAI API<br/><b>gpt-4o-mini</b>"}}:::llm
+
+    RESPONSE["📋 TicketClassification<br/><i>category, priority,<br/>assigned_team, summary</i>"]:::llm
+
+    subgraph EVENTS["📨 Follow-up Events Published"]
+        direction LR
+        E1["ticket.processing<br/>.started"]:::worker
+        E2["ticket<br/>.classified"]:::worker
+        E3{"Priority?"}:::queue
+        E4["ticket<br/>.escalated<br/><i>High Priority</i>"]:::worker
+        E5["ticket<br/>.routed<br/><i>Normal Priority</i>"]:::worker
+    end
+
+    DASHBOARD(["📊 Live HTML Dashboard<br/><i>Event Log + Ticket State Table</i><br/><i>Real-time Updates</i>"]):::dashboard
+
+    CLIENT -- "POST /events<br/>{event_type, ticket_id,<br/>correlation_id, payload}" --> API
+    API -- "Enqueue event" --> QUEUE
+    QUEUE -- "Consume" --> WORKER
+    WORKER -- "publish_event()" --> PUBLISH
+    PUBLISH -- "Save event &<br/>update ticket state" --> STORE
+    PUBLISH -- "Broadcast" --> WSMGR
+
+    WORKER -- "Pass event" --> AGENT
+    AGENT -- "Build prompt" --> PROMPT
+    PROMPT --> CHAIN
+    CHAIN -- "API call" --> OPENAI
+    OPENAI -- "Structured response" --> RESPONSE
+    RESPONSE -- "Classification result" --> AGENT
+
+    AGENT -- "Publish follow-up events" --> E1
+    E1 --> E2
+    E2 --> E3
+    E3 -- "High" --> E4
+    E3 -- "Normal" --> E5
+    E4 & E5 -- "publish_event()" --> PUBLISH
+
+    WSMGR -- "WebSocket messages" --> DASHBOARD

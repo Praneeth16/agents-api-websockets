@@ -1,0 +1,9 @@
+{
+  "event_type": "ticket.created",
+  "ticket_id": "T-1005",
+  "correlation_id": "corr-1005",
+  "payload": {
+    "message": "Critical outage: entire production cluster is down. All API endpoints returning 503. This is ASAP.",
+    "customer_tier": "enterprise"
+  }
+}

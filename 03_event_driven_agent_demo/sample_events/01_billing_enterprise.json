@@ -1,0 +1,9 @@
+{
+  "event_type": "ticket.created",
+  "ticket_id": "T-1001",
+  "correlation_id": "corr-1001",
+  "payload": {
+    "message": "Urgent refund request. Our production checkout is down for enterprise customers.",
+    "customer_tier": "enterprise"
+  }
+}
